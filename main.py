@@ -1,22 +1,36 @@
+from flask import Flask, request, jsonify
 import requests
-from flask import Flask, request, make_response
 
 app = Flask(__name__)
 
-@app.route('/')
+@app.route('/', methods=['GET', 'POST', 'OPTIONS'])
 def proxy():
-    url = 'https://www.bing.com' + request.full_path
-    headers = {'User-Agent': request.headers.get('User-Agent')}
-    response = requests.get(url, headers=headers)
-    
-    # 创建响应对象并设置转发的数据
-    resp = make_response(response.content)
-    
-    # 将bing.com的响应头复制到转发的响应中
-    for key, value in response.headers.items():
-        resp.headers[key] = value
-    
-    return resp
+    if request.method == 'OPTIONS':
+        # 处理预检请求
+        headers = {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept'
+        }
+        return '', 200, headers
+    else:
+        # 转发请求并处理响应
+        headers = {
+            'Access-Control-Allow-Origin': '*'
+        }
+        try:
+            response = requests.request(
+                method=request.method,
+                url='https://www.bing.com' + request.full_path,
+                headers={k: v for k, v in request.headers if k != 'Host'},
+                data=request.get_data(),
+                cookies=request.cookies,
+                allow_redirects=False
+            )
+            content_type = response.headers.get('content-type')
+            return (response.content, response.status_code, {'Content-Type': content_type, 'Access-Control-Allow-Origin': '*'})
+        except requests.exceptions.RequestException as e:
+            return str(e), 500, headers
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080)
+    app.run(host='0.0.0.0', port=80)
